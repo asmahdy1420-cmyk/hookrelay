@@ -1,0 +1,47 @@
+x-hookrelay-env: &hookrelay-env
+  HOOKRELAY_DATABASE_URL: postgresql+psycopg://hookrelay:hookrelay@postgres:5432/hookrelay
+  HOOKRELAY_REDIS_URL: redis://redis:6379/0
+  HOOKRELAY_ADMIN_TOKEN: ${HOOKRELAY_ADMIN_TOKEN:-dev-admin-token}
+  HOOKRELAY_PROVIDER_SECRETS: '{"acme": "whsec_dev_secret"}'
+
+services:
+  api:
+    build: .
+    environment: *hookrelay-env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    build: .
+    command: celery -A hookrelay.tasks:celery_app worker --beat --loglevel=info --concurrency=4
+    environment: *hookrelay-env
+    depends_on:
+      api: { condition: service_started }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hookrelay
+      POSTGRES_PASSWORD: hookrelay
+      POSTGRES_DB: hookrelay
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hookrelay"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:
