@@ -7,6 +7,20 @@ and your internal **subscribers**. It accepts inbound webhooks safely and fast, 
 them to subscriber endpoints with retries, backoff, a per-endpoint circuit breaker and a
 dead-letter queue you can replay from.
 
+## Screenshots
+
+A signed webhook is accepted, the same event sent again is reported as a duplicate, and a bad signature gets a 401 (local run with docker compose):
+
+![Signed webhook, duplicate and bad signature](docs/screenshots/signed-webhook-dedupe.png)
+
+A stub subscriber that answers 503 twice and then 200: the worker retries with backoff until the delivery succeeds.
+
+![Delivery retries until the subscriber recovers](docs/screenshots/delivery-retry.png)
+
+The interactive API docs at `/docs`, with `POST /endpoints` expanded.
+
+![Swagger UI](docs/screenshots/api-docs.png)
+
 ## Why
 
 Webhooks look simple and fail in boring, expensive ways:
@@ -63,7 +77,7 @@ the network:
 | `2xx` | success | delivered, breaker reset |
 | `5xx`, `408`, `425`, `429`, timeout, connection error | retry | backoff (or `Retry-After`), breaker failure |
 | other `4xx`, `3xx` | fail | dead letter immediately; breaker **not** charged (the endpoint is up) |
-| attempts reach `max_attempts` | — | dead letter with reason `max_attempts` |
+| attempts reach `max_attempts` | none | dead letter with reason `max_attempts` |
 
 Backoff is exponential with **full jitter**: `uniform(0, min(max_delay, base * 2^(n-1)))`.
 A `Retry-After` header (seconds or HTTP-date) replaces the computed delay, capped at `max_delay`.
