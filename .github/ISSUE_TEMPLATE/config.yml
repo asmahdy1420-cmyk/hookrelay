@@ -1,0 +1,2 @@
+blank_issues_enabled: false
+contact_links: [{name: "Design decisions", url: "https://github.com/asmahdy1420-cmyk/hookrelay#design-decisions", about: "Read why hookrelay works the way it does before opening an issue"}]
