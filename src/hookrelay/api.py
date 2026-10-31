@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, List, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
@@ -172,10 +172,10 @@ def create_app(create_tables: bool = True) -> FastAPI:
     )
     def list_dead_letters(
         include_replayed: bool = False,
-        limit: int = 50,
+        limit: int = Query(default=50, ge=1, le=500),
         session: Session = Depends(db.get_session),
     ) -> list:
-        q = select(DeadLetter).order_by(DeadLetter.id.desc()).limit(min(limit, 500))
+        q = select(DeadLetter).order_by(DeadLetter.id.desc()).limit(limit)
         if not include_replayed:
             q = q.where(DeadLetter.replayed_at.is_(None))
         return list(session.scalars(q))
