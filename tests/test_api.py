@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import timezone
+from datetime import datetime, timezone
 
+import pytest
 from sqlalchemy import func, select
 
 from hookrelay import signature
-from hookrelay.models import Delivery, InboundEvent
+from hookrelay.models import DeadLetter, Delivery, Endpoint, InboundEvent
 from tests.conftest import ADMIN
 
 
@@ -87,3 +88,39 @@ def test_admin_routes_require_token(client) -> None:
     assert client.get("/admin/dead-letters").status_code == 401
     assert client.get("/admin/dead-letters", headers={"X-Admin-Token": "nope"}).status_code == 401
     assert client.get("/admin/dead-letters", headers=ADMIN).json() == []
+
+
+@pytest.mark.parametrize("limit", [0, -1, 501])
+def test_dead_letter_limit_out_of_range_is_rejected(client, limit) -> None:
+    resp = client.get(f"/admin/dead-letters?limit={limit}", headers=ADMIN)
+    assert resp.status_code == 422
+
+
+@pytest.mark.parametrize("limit", [1, 500])
+def test_dead_letter_limit_boundaries_are_accepted(client, limit) -> None:
+    resp = client.get(f"/admin/dead-letters?limit={limit}", headers=ADMIN)
+    assert resp.status_code == 200
+
+
+def test_dead_letter_listing_hides_replayed_unless_requested(
+    client, session_factory, endpoint
+) -> None:
+    s = session_factory()
+    ep_id = s.scalar(select(Endpoint.id))
+    event = InboundEvent(provider="acme", event_id="evt_dl", raw_body="{}")
+    s.add(event)
+    s.flush()
+    delivery = Delivery(event_id=event.id, endpoint_id=ep_id, status="dead")
+    s.add(delivery)
+    s.flush()
+    s.add(DeadLetter(delivery_id=delivery.id, reason="max_attempts", attempts=3))
+    replayed = DeadLetter(delivery_id=delivery.id, reason="max_attempts", attempts=3)
+    replayed.replayed_at = datetime(2026, 1, 1)
+    s.add(replayed)
+    s.commit()
+    s.close()
+    pending = client.get("/admin/dead-letters", headers=ADMIN).json()
+    assert len(pending) == 1 and pending[0]["replayed_at"] is None
+    url = "/admin/dead-letters?include_replayed=true"
+    assert len(client.get(url, headers=ADMIN).json()) == 2
+    assert len(client.get(url + "&limit=1", headers=ADMIN).json()) == 1
