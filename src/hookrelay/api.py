@@ -46,6 +46,10 @@ class EndpointOut(BaseModel):
     breaker_failures: int
 
 
+class EndpointPatch(BaseModel):
+    active: bool
+
+
 class DeadLetterOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -164,6 +168,15 @@ def create_app(create_tables: bool = True) -> FastAPI:
     @app.get("/endpoints", response_model=List[EndpointOut], dependencies=[Depends(require_admin)])
     def list_endpoints(session: Session = Depends(db.get_session)) -> list:
         return list(session.scalars(select(Endpoint).order_by(Endpoint.id)))
+
+    @app.patch("/endpoints/{endpoint_id}", response_model=EndpointOut, dependencies=[Depends(require_admin)])
+    def update_endpoint(endpoint_id: int, data: EndpointPatch, session: Session = Depends(db.get_session)) -> Endpoint:
+        ep = session.get(Endpoint, endpoint_id)
+        if ep is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "endpoint not found")
+        ep.active = data.active
+        session.commit()
+        return ep
 
     @app.get(
         "/admin/dead-letters",
