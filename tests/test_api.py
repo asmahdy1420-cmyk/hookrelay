@@ -124,3 +124,29 @@ def test_dead_letter_listing_hides_replayed_unless_requested(
     url = "/admin/dead-letters?include_replayed=true"
     assert len(client.get(url, headers=ADMIN).json()) == 2
     assert len(client.get(url + "&limit=1", headers=ADMIN).json()) == 1
+
+
+def test_endpoint_can_be_deactivated_and_reactivated(client, endpoint, receiver, clock) -> None:
+    url = "/endpoints/" + str(client.get("/endpoints", headers=ADMIN).json()[0]["id"])
+    resp = client.patch(url, json={"active": False}, headers=ADMIN)
+    assert resp.status_code == 200 and resp.json()["active"] is False
+    body, headers = signed({"id": "evt_off", "type": "invoice.paid"})
+    assert client.post("/webhooks/acme", content=body, headers=headers).status_code == 202
+    assert receiver.requests == []
+    resp = client.patch(url, json={"active": True}, headers=ADMIN)
+    assert resp.status_code == 200 and resp.json()["active"] is True
+    body, headers = signed({"id": "evt_on", "type": "invoice.paid"})
+    assert client.post("/webhooks/acme", content=body, headers=headers).status_code == 202
+    assert len(receiver.requests) == 1
+
+
+def test_patch_unknown_endpoint_returns_404(client) -> None:
+    assert client.patch("/endpoints/9999", json={"active": False}, headers=ADMIN).status_code == 404
+
+
+def test_patch_endpoint_requires_admin_token_and_valid_body(client, endpoint) -> None:
+    ep_id = client.get("/endpoints", headers=ADMIN).json()[0]["id"]
+    url = "/endpoints/" + str(ep_id)
+    assert client.patch(url, json={"active": False}).status_code == 401
+    assert client.patch(url, json={}, headers=ADMIN).status_code == 422
+    assert client.get("/endpoints", headers=ADMIN).json()[0]["active"] is True
