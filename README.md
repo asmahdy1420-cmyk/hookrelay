@@ -152,6 +152,14 @@ curl -s -X POST localhost:8000/webhooks/acme \
 # {"status":"duplicate","event_id":"evt_123"}
 ```
 
+Pause or resume a subscriber (a deactivated endpoint gets no new deliveries):
+
+```bash
+curl -s -X PATCH localhost:8000/endpoints/1 \
+  -H 'X-Admin-Token: dev-admin-token' -H 'Content-Type: application/json' \
+  -d '{"active": false}'
+```
+
 Inspect and replay dead letters:
 
 ```bash
