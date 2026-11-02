@@ -169,8 +169,16 @@ def create_app(create_tables: bool = True) -> FastAPI:
     def list_endpoints(session: Session = Depends(db.get_session)) -> list:
         return list(session.scalars(select(Endpoint).order_by(Endpoint.id)))
 
-    @app.patch("/endpoints/{endpoint_id}", response_model=EndpointOut, dependencies=[Depends(require_admin)])
-    def update_endpoint(endpoint_id: int, data: EndpointPatch, session: Session = Depends(db.get_session)) -> Endpoint:
+    @app.patch(
+        "/endpoints/{endpoint_id}",
+        response_model=EndpointOut,
+        dependencies=[Depends(require_admin)],
+    )
+    def update_endpoint(
+        endpoint_id: int,
+        data: EndpointPatch,
+        session: Session = Depends(db.get_session),
+    ) -> Endpoint:
         ep = session.get(Endpoint, endpoint_id)
         if ep is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "endpoint not found")
